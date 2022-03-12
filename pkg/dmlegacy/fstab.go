@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	log "github.com/sirupsen/logrus"
 	api "github.com/weaveworks/ignite/pkg/apis/ignite"
 	"github.com/weaveworks/ignite/pkg/util"
 )
@@ -56,7 +57,7 @@ func populateFstab(vm *api.VM, mountPoint string) error {
 	entries := make(map[string]*fstabEntry, util.MaxInt(len(vm.Spec.Storage.Volumes), len(vm.Spec.Storage.VolumeMounts)))
 
 	// Discover all volumes
-	for _, volume := range vm.Spec.Storage.Volumes {
+	for i, volume := range vm.Spec.Storage.Volumes {
 		if volume.BlockDevice == nil {
 			continue // Skip all non block device volumes for now
 		}
@@ -68,7 +69,7 @@ func populateFstab(vm *api.VM, mountPoint string) error {
 		}
 
 		// Create an entry for the volume
-		entries[volume.Name] = &fstabEntry{uuid: uuid}
+		entries[volume.Name] = &fstabEntry{uuid: uuid, mountPoint: fmt.Sprintf("/mnt/disk-%d", i)}
 	}
 
 	// Discover all volume mounts
@@ -103,9 +104,11 @@ func getUUID(devPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("command %q exited with %q: %w", cmd.Args, out, err)
 	}
+	log.Debugf("blkid %s output: %s", devPath, out)
 
 	uuidMatch := blkidUUIDRegex.FindStringSubmatch(string(out))
 	if len(uuidMatch) > 1 {
+		log.Debugf("uuid match: %s", uuidMatch[1])
 		return uuidMatch[1], nil
 	}
 
